@@ -11,21 +11,6 @@
 
 #include <ableton/Link.hpp>
 
-static std::chrono::microseconds linkTimeOfInitialization;
-void initLink()
-{
-	linkTimeOfInitialization   = ableton::link::platform::Clock().micros();
-}
-
-inline std::chrono::microseconds hrToLinkTime(double secs){
-	auto time = std::chrono::duration<double>(secs);
-	return std::chrono::duration_cast<std::chrono::microseconds>(time) + linkTimeOfInitialization;
-}
-
-inline double linkToHrTime(std::chrono::microseconds micros){
-	return DurToFloat(micros - linkTimeOfInitialization);
-}
-
 class LinkClock : public TempoClock
 {
 public:
@@ -37,29 +22,38 @@ public:
 	void SetTempoAtBeat(double inTempo, double inBeats);
 	void SetTempoAtTime(double inTempo, double inSeconds);
 	void SetAll(double inTempo, double inBeats, double inSeconds);
-	double BeatsToSecs(double beats) const
-	{
-		auto sessionState = mLink.captureAppSessionState();
-		double secs = linkToHrTime(sessionState.timeAtBeat(beats, mQuantum)) - mLatency;
-		return secs;
-	}
-	double SecsToBeats(double secs) const
-	{
-		auto sessionState = mLink.captureAppSessionState();
-		double beats = sessionState.beatAtTime(hrToLinkTime(secs + mLatency), mQuantum);
-		return beats;
-	}
+	double BeatsToSecs(double beats) const;
+	double SecsToBeats(double secs) const;
 
 	void SetQuantum(double quantum);
         double GetLatency();
         void SetLatency(double latency);
 	std::size_t NumPeers() const { return mLink.numPeers(); }
 
+  static void Init();
+  static std::chrono::microseconds GetInitTime() { return LinkClock::mInitTime; }
+
 private:
 	ableton::Link mLink;
 	double mQuantum;
 	double mLatency;
+  static std::chrono::microseconds mInitTime;
 };
+
+std::chrono::microseconds LinkClock::mInitTime;
+
+inline std::chrono::microseconds hrToLinkTime(double secs){
+	auto time = std::chrono::duration<double>(secs);
+	return std::chrono::duration_cast<std::chrono::microseconds>(time) + LinkClock::GetInitTime();
+}
+
+inline double linkToHrTime(std::chrono::microseconds micros){
+	return DurToFloat(micros - LinkClock::GetInitTime());
+}
+
+void LinkClock::Init() {
+  mInitTime = ableton::link::platform::Clock().micros();
+}
 
 LinkClock::LinkClock(VMGlobals *inVMGlobals, PyrObject* inTempoClockObj,
 							double inTempo, double inBaseBeats, double inBaseSeconds)
@@ -132,6 +126,20 @@ LinkClock::LinkClock(VMGlobals *inVMGlobals, PyrObject* inTempoClockObj,
 	auto linkTime = hrToLinkTime(inBaseSeconds);
 	sessionState.requestBeatAtTime(inBaseBeats, linkTime, mQuantum);
 	mLink.commitAppSessionState(sessionState);
+}
+
+double LinkClock::BeatsToSecs(double beats) const
+{
+  auto sessionState = mLink.captureAppSessionState();
+  double secs = linkToHrTime(sessionState.timeAtBeat(beats, mQuantum)) - mLatency;
+  return secs;
+}
+
+double LinkClock::SecsToBeats(double secs) const
+{
+  auto sessionState = mLink.captureAppSessionState();
+  double beats = sessionState.beatAtTime(hrToLinkTime(secs + mLatency), mQuantum);
+  return beats;
 }
 
 void LinkClock::SetAll(double inTempo, double inBeats, double inSeconds)

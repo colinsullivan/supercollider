@@ -234,14 +234,17 @@ using monotonic_clock = std::conditional<std::chrono::high_resolution_clock::is_
 static std::chrono::high_resolution_clock::time_point hrTimeOfInitialization;
 
 #ifdef SC_ABLETON_LINK
-	void initLink();
+  class LinkClock {
+    public:
+      static void Init();
+  };
 #endif
 SCLANG_DLLEXPORT_C void schedInit()
 {
 	using namespace std::chrono;
 	hrTimeOfInitialization     = high_resolution_clock::now();
 #ifdef SC_ABLETON_LINK
-	initLink();
+  LinkClock::Init();
 #endif
 
 	syncOSCOffsetWithTimeOfDay();
